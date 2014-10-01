@@ -69,25 +69,6 @@ void spawn_job(job_t *j, bool fg)
             new_child(j, p, fg);
             
 	    /* YOUR CODE HERE?  Child-side code for new process. */
-
-		//Negatu's code
-		if(p->ofile != NULL){
-		 close(STDOUT_FILENO);
-		 open(p->ofile, O_CREAT|O_WRONLY, S_IRWXU);
-		}
-		if(p->ifile != NULL){
-		 close(STDIN_FILENO);
-		 open(p->ifile, O_RDONLY, S_IRWXU);
-		}
-		if(p->next != NULL){
-		 process_t *p2;//next process in pipeline
-		 p2 = p->next;
-		 
-		}
-
-		execvp(p->argv[0],p->argv);
-		//Negatu's code ends here
-
             perror("New child should have done an exec");
             exit(EXIT_FAILURE);  /* NOT REACHED */
             break;    /* NOT REACHED */
@@ -180,21 +161,5 @@ int main()
             /* spawn_job(j,true) */
             /* else */
             /* spawn_job(j,false) */
-
-
-	/* Negatu's code starts here */
-	job_t *cur_job; //current job
-	for(cur_job = j; cur_job; cur_job = cur_job->next) {
-		if (cur_job->bg){
-			spawn_job(cur_job,false);
-		}
-		else{
-			spawn_job(cur_job,true);
-		}
-	}
-	/* Negatu's code ends here*/
-
-
-
     }
 }
