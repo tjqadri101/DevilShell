@@ -3,6 +3,9 @@
 void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for the calling process pgid.  */
 void continue_job(job_t *j); /* resume a stopped job */
 void spawn_job(job_t *j, bool fg); /* spawn a new job */
+void set_job_status(job_t *j);/*set process status for a spawned job*/
+
+job_t *active_list = NULL; //active list of jobs
 
 /* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p)
@@ -66,6 +69,7 @@ void spawn_job(job_t *j, bool fg)
 
           case 0: /* child process  */
             p->pid = getpid();	    
+	    //printf("Child pid %d\n", getpid());
             new_child(j, p, fg);
             
 	    /* YOUR CODE HERE?  Child-side code for new process. */
@@ -96,15 +100,49 @@ void spawn_job(job_t *j, bool fg)
             /* establish child process group */
             p->pid = pid;
             set_child_pgid(j, p);
-
-            /* YOUR CODE HERE?  Parent-side code for new process.  */
+            /* Parent-side code for new process.  */
+	    //Talal's code
+	    if (waitpid(pid, &p->status, WNOHANG|WUNTRACED) < 0){//waitpid here returns immediately, with a return value of 0,...
+							      //if none of the children in the wait set has stopped or terminated, or with a...
+								//return value equal to the PID of one of the stopped or terminated children.
+			 perror("fork");
+            		 exit(EXIT_FAILURE);
+	    }
           }
+	}
+	/* Parent-side code for new job.*/
+	//By this point, all child processes have been created
+	//We know a job is completed only when all the processes have exited
+	//However,we want the processes to run concurrently si waitpid in the for loop above is non-blocking
+	set_job_status(j);
+	//By this point all processes for this job have exited or stopped
+	seize_tty(getpid()); // assign the terminal back to dsh
+	
+}
 
-            /* YOUR CODE HERE?  Parent-side code for new job.*/
-	    seize_tty(getpid()); // assign the terminal back to dsh
-
+void set_job_status(job_t *j){
+	process_t *p;
+	for(p = j->first_process; p; p = p->next){
+		while(waitpid(p->pid, &p->status, WNOHANG|WUNTRACED) == 0); //waitpid returns 0 here if child has not terminated; otherwise returns child pid
+			//p has exited by now, either normally or abnormally		
+			if (WIFEXITED(p->status)){
+				printf("Process %d of job %ld terminated normally with exit status=%d\n",p->pid, (long)j->pgid, WEXITSTATUS(p->status));
+				p->completed = true;
+			}
+			else if (WIFSTOPPED(p->status)){
+				printf("Process %d of job %ld stopped by signal number=%d\n",p->pid, (long)j->pgid, WSTOPSIG(p->status));
+				p->stopped = true;
+			}
+			else if (WIFSIGNALED(p->status)){
+				printf("Process %d of job %ld terminated by signal number=%d\n",p->pid, (long)j->pgid, WTERMSIG(p->status));
+				p->completed = true;
+			}
+			else if (WIFSIGNALED(p->status)){
+				printf("Process %d of job %ld terminated by signal number=%d\n",p->pid, (long)j->pgid, WTERMSIG(p->status));
+			}
 	}
 }
+//Talal's code ends here
 
 /* Sends SIGCONT signal to wake up the blocked job */
 void continue_job(job_t *j) 
@@ -153,7 +191,7 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 char* promptmsg() 
 {
     /* Modified by Talal to include pid */
-	char *prompt = ((char *) (malloc(sizeof(char)*25)));//4 bytes needed for pid int, 1 for null character in the end
+	char *prompt = ((char *) (malloc(sizeof(char)*30)));//4 bytes needed for pid int, 1 for null character in the end
 	int pid = getpid();
 	sprintf(prompt, "dsh(PID = %d)$ ", pid);
 	return prompt;
@@ -164,13 +202,23 @@ int main()
 
 	init_dsh();
 	DEBUG("Successfully initialized\n");
-
+	/*Talal's code block starts here*/
+	active_list = (job_t *)malloc(sizeof(job_t));
+	if(!init_job(active_list)) {
+	        	fprintf(stderr, "%s\n","malloc: no space for prologue header of active list of jobs");
+			exit(EXIT_FAILURE);
+        }
+	job_t *j = (job_t *)malloc(sizeof(job_t));
+	if(!init_job(j)) {
+	        	fprintf(stderr, "%s\n","malloc: no space for prologue header for job list from command line");
+			exit(EXIT_FAILURE);
+        }
+	/*End of Talal's code block*/
 	while(1) {
-        job_t *j = NULL;
 	/*The block starting here was modified by Talal*/
 	char* prompt;
 	prompt = promptmsg();
-		if(!(j = readcmdline(prompt))) {
+		if(!(j->next = readcmdline(prompt))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
 				fflush(stdout);
 				printf("\n");
@@ -182,7 +230,7 @@ int main()
 	/*End of modified block*/
         /* Only for debugging purposes to show parser output; turn off in the
          * final code */
-        if(PRINT_INFO) print_job(j);
+        if(PRINT_INFO) print_job(j->next);
 
         /* Your code goes here */
         /* You need to loop through jobs list since a command line can contain ;*/
@@ -195,9 +243,9 @@ int main()
 
 
 	/* This block was added by Talal and Negatu */
-	job_t *cur_job; //current job
-
-	for(cur_job = j; cur_job; cur_job = cur_job->next) {
+	job_t *temp_job; //current job
+	job_t *cur_job = j->next;
+	while(cur_job != NULL) {
 	//As per instructions, if a job contains a builtin command then it is the only command in the job
 		if(!builtin_cmd(cur_job, cur_job->first_process->argc, cur_job->first_process->argv)){
 			if (cur_job->bg){
@@ -206,8 +254,26 @@ int main()
 			else{
 				spawn_job(cur_job,true);
 			}
+			if(job_is_stopped(cur_job)){
+				if(job_is_completed(cur_job)){
+					temp_job = cur_job->next;
+					delete_job(cur_job, j);
+					cur_job = temp_job;
+				}
+				else{
+					cur_job = cur_job->next;
+				}
+
+
+			}
+		    else{//command was a built in command
+			cur_job = cur_job->next;
+
+		   } 
 		}
+
 	}
+	print_job(j->next);
 	/* Block ends here*/
 
 
