@@ -120,6 +120,7 @@ void continue_job(job_t *j)
  */
 bool builtin_cmd(job_t *last_job, int argc, char **argv) 
 {
+	/*Talal's code*/
 
 	    /* check whether the cmd is a built in command
         */
@@ -134,6 +135,9 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
         }
 	else if (!strcmp("cd", argv[0])) {
             /* Your code here */
+		if(chdir(argv[1]) < 0)
+			perror("Incorrect directory path was given.");
+		return true;
         }
         else if (!strcmp("bg", argv[0])) {
             /* Your code here */
@@ -142,13 +146,17 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
             /* Your code here */
         }
         return false;       /* not a builtin command */
+	/*Talals code ends here*/
 }
 
 /* Build prompt messaage */
 char* promptmsg() 
 {
-    /* Modify this to include pid */
-	return "dsh$ ";
+    /* Modified by Talal to include pid */
+	char *prompt = ((char *) (malloc(sizeof(char)*25)));//4 bytes needed for pid int, 1 for null character in the end
+	int pid = getpid();
+	sprintf(prompt, "dsh(PID = %d)$ ", pid);
+	return prompt;
 }
 
 int main() 
@@ -159,7 +167,10 @@ int main()
 
 	while(1) {
         job_t *j = NULL;
-		if(!(j = readcmdline(promptmsg()))) {
+	/*The block starting here was modified by Talal*/
+	char* prompt;
+	prompt = promptmsg();
+		if(!(j = readcmdline(prompt))) {
 			if (feof(stdin)) { /* End of file (ctrl-d) */
 				fflush(stdout);
 				printf("\n");
@@ -167,7 +178,8 @@ int main()
            		}
 			continue; /* NOOP; user entered return or spaces with return */
 		}
-
+	free(prompt);//free the pointer to the prompt message
+	/*End of modified block*/
         /* Only for debugging purposes to show parser output; turn off in the
          * final code */
         if(PRINT_INFO) print_job(j);
@@ -182,17 +194,21 @@ int main()
             /* spawn_job(j,false) */
 
 
-	/* Negatu's code starts here */
+	/* This block was added by Talal and Negatu */
 	job_t *cur_job; //current job
+
 	for(cur_job = j; cur_job; cur_job = cur_job->next) {
-		if (cur_job->bg){
-			spawn_job(cur_job,false);
-		}
-		else{
-			spawn_job(cur_job,true);
+	//As per instructions, if a job contains a builtin command then it is the only command in the job
+		if(!builtin_cmd(cur_job, cur_job->first_process->argc, cur_job->first_process->argv)){
+			if (cur_job->bg){
+				spawn_job(cur_job,false);
+			}
+			else{
+				spawn_job(cur_job,true);
+			}
 		}
 	}
-	/* Negatu's code ends here*/
+	/* Block ends here*/
 
 
 
