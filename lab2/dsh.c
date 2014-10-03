@@ -86,46 +86,48 @@ void spawn_job(job_t *j, bool fg)
 
 		//Negatu's code
 		
-		if(p->ofile != NULL){
-		 Close(STDOUT_FILENO);
-		 if(open(p->ofile, O_CREAT|O_WRONLY, S_IRWXU) < 0){
-			 perror("open");
-           		 exit(EXIT_FAILURE);
-		}
-;
-		}
-		if(p->ifile != NULL){
-		 Close(STDIN_FILENO);
-		 if(open(p->ifile, O_RDONLY, S_IRWXU) < 0){
-			perror("open");
-           		exit(EXIT_FAILURE);
-		}
-		
+			if(p->ofile != NULL){
+			 Close(STDOUT_FILENO);
+			 if(open(p->ofile, O_CREAT|O_WRONLY, S_IRWXU) < 0){
+				 perror("open");
+					 exit(EXIT_FAILURE);
+			 }
+			}
+	;
+	
+			if(p->ifile != NULL){
+			 Close(STDIN_FILENO);
+			 if(open(p->ifile, O_RDONLY, S_IRWXU) < 0){
+				perror("open");
+					exit(EXIT_FAILURE);
+			 }
+			}
+			
 
-		if(p->next != NULL){
-		 //printf("\n -ch sender %d %s \n",ppos,p->argv[0]);
-		 Close(STDOUT_FILENO);
-		 Dup2(fpp[1],STDOUT_FILENO);
-		 Close(fpp[0]);
-		 //close(fpp[1]);
-		 //perror("\n --------- ");
-		
-		 }
-		 
-		 if (ppos!=0){
-		  //printf("\n -ch getter %d %s \n",ppos,p->argv[0]);
-			Close(STDIN_FILENO);
-			Dup2(bpp[0],STDIN_FILENO);
-			Close(bpp[1]);
-			//close(bpp[0]);
-			// perror("\n --------- ");
-			//close(bpp[1]);
+			if(p->next != NULL){
+			 //printf("\n -ch sender %d %s \n",ppos,p->argv[0]);
+			 Close(STDOUT_FILENO);
+			 Dup2(fpp[1],STDOUT_FILENO);
+			 Close(fpp[0]);
+			 //close(fpp[1]);
 			 //perror("\n --------- ");
-		}
-		
+			
+			 }
+			 
+			 if (ppos!=0){
+			  //printf("\n -ch getter %d %s \n",ppos,p->argv[0]);
+				Close(STDIN_FILENO);
+				Dup2(bpp[0],STDIN_FILENO);
+				Close(bpp[1]);
+				//close(bpp[0]);
+				// perror("\n --------- ");
+				//close(bpp[1]);
+				 //perror("\n --------- ");
+			}
+			
 
-		printf("");//This is a buffer between exec and child code.
-		execvp(p->argv[0],p->argv);
+			printf("");//This is a buffer between exec and child code.
+			execvp(p->argv[0],p->argv);
 		//Negatu's code ends here
 
             perror("\nNew child should have done an exec");
@@ -133,36 +135,36 @@ void spawn_job(job_t *j, bool fg)
             break;    /* NOT REACHED */
 
           default: /* parent */
-		pipe(bpp);
-		
-		bpp[0] = fpp[0];
-		//close(bpp[0]);
-		Close(bpp[1]);
-		//close(fpp[0]);
-		Close(fpp[1]);
-		
-		ppos++;
-		//printf("\n sender %d %s \n",ppos,p->argv[0]);
-		
+			pipe(bpp);
+			
+			bpp[0] = fpp[0];
+			//close(bpp[0]);
+			Close(bpp[1]);
+			//close(fpp[0]);
+			Close(fpp[1]);
+			
+			ppos++;
+			//printf("\n sender %d %s \n",ppos,p->argv[0]);
+			
 
-            /* establish child process group */
-            p->pid = pid;
-	    if(j->pgid < 0 && fg)
-	    		launchCheck = true;
-            set_child_pgid(j, p);
-	    if(launchCheck){
-			fprintf(stdout, "Job %ld(launched): %s\n", (long) j->pgid, j->commandinfo); 
-			launchCheck = false;
-	    }
-            /* Parent-side code for new process.  */
-	    //Talal's code block starts here*/
-	    if (waitpid(pid, &p->status, WNOHANG|WUNTRACED) < 0){//waitpid here returns immediately, with a return value of 0,...
-							      //if none of the children in the wait set has stopped or terminated, or with a...
-								//return value equal to the PID of one of the stopped or terminated children.
-			 perror("fork");
-            		 exit(EXIT_FAILURE);
-	    }
-          }
+			/* establish child process group */
+			p->pid = pid;
+			if(j->pgid < 0 && fg)
+					launchCheck = true;
+			set_child_pgid(j, p);
+			if(launchCheck){
+				fprintf(stdout, "Job %ld(launched): %s\n", (long) j->pgid, j->commandinfo); 
+				launchCheck = false;
+			}
+				/* Parent-side code for new process.  */
+			/*Talal's code block starts here*/
+			if (waitpid(pid, &p->status, WNOHANG|WUNTRACED) < 0){//waitpid here returns immediately, with a return value of 0,...
+									  //if none of the children in the wait set has stopped or terminated, or with a...
+									//return value equal to the PID of one of the stopped or terminated children.
+				 perror("fork");
+				exit(EXIT_FAILURE);
+			}
+         }
 	}
 	/* Parent-side code for new job.*/
 	
@@ -378,6 +380,7 @@ int main()
 			//if(PRINT_INFO) print_job(j->next);
 
 			/* Your code goes here */
+
 			/* You need to loop through jobs list since a command line can contain ;*/
 			/* Check for built-in commands */
 			/* If not built-in */
