@@ -11,8 +11,9 @@ job_t *active_list = NULL; //active list of jobs
 /* Sets the process group id for a given job and process */
 int set_child_pgid(job_t *j, process_t *p)
 {
-    if (j->pgid < 0) /* first child: use its pid for job pgid */
+    if (j->pgid < 0){ /* first child: use its pid for job pgid */
         j->pgid = p->pid;
+    }
     return(setpgid(p->pid,j->pgid));
 }
 
@@ -60,7 +61,7 @@ void spawn_job(job_t *j, bool fg)
 	int ppos = 0;
 	int fpp[2];
 	int bpp[2];
-	
+	bool launchCheck = false;
 	
 	for(p = j->first_process; p; p = p->next) {
 
@@ -114,16 +115,15 @@ void spawn_job(job_t *j, bool fg)
 		}
 		
 
-		printf("");
+		printf("");//This is a buffer between exec and child code.
 		execvp(p->argv[0],p->argv);
 		//Negatu's code ends here
 
-            perror("New child should have done an exec");
+            perror("\nNew child should have done an exec");
             exit(EXIT_FAILURE);  /* NOT REACHED  */
             break;    /* NOT REACHED */
 
           default: /* parent */
-		
 		pipe(bpp);
 		
 		bpp[0] = fpp[0];
@@ -138,7 +138,13 @@ void spawn_job(job_t *j, bool fg)
 
             /* establish child process group */
             p->pid = pid;
+	    if(j->pgid < 0)
+	    		launchCheck = true;
             set_child_pgid(j, p);
+	    if(launchCheck){
+			fprintf(stdout, "Job %ld(launched): %s\n", (long) j->pgid, j->commandinfo); 
+			launchCheck = false;
+	    }
             /* Parent-side code for new process.  */
 	    //Talal's code
 	    if (waitpid(pid, &p->status, WNOHANG|WUNTRACED) < 0){//waitpid here returns immediately, with a return value of 0,...
@@ -173,15 +179,15 @@ void set_job_status(job_t *j){
 			}
 			else{
 				if (WIFEXITED(p->status)){
-					printf("Process %d of job %ld terminated normally with exit status=%d\n",p->pid, (long)j->pgid, WEXITSTATUS(p->status));
+					//printf("Process %d of job %ld terminated normally with exit status=%d\n",p->pid, (long)j->pgid, WEXITSTATUS(p->status));
 					p->completed = true;
 				}
 				else if (WIFSTOPPED(p->status)){
-					printf("Process %d of job %ld stopped by signal number=%d\n",p->pid, (long)j->pgid, WSTOPSIG(p->status));
+					//printf("Process %d of job %ld stopped by signal number=%d\n",p->pid, (long)j->pgid, WSTOPSIG(p->status));
 					p->stopped = true;
 				}
 				else if (WIFSIGNALED(p->status)){
-					printf("Process %d of job %ld terminated by signal number=%d\n",p->pid, (long)j->pgid, WTERMSIG(p->status));
+					printf("Process %d of job %ld terminated by signal number=%d. Job will complete abnormally.\n",p->pid, (long)j->pgid, WTERMSIG(p->status));
 					p->completed = true;
 				}
 			}
@@ -259,7 +265,10 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
             // Only prints out the suspended jobs that have not yet completed 
 	    //The user is notified of completed jobs when the prompt appears again...
             //which means that the job has completed and the shell is running in the foreground again
-	    print_job(active_list->next);
+	    if(active_list->next)	    
+		print_job(active_list->next);
+	    else
+		printf("There are currently no active jobs.\n");
             return true;
         }
 	else if (!strcmp("cd", argv[0])) {
@@ -302,7 +311,7 @@ char* promptmsg()
     /* Modified by Talal to include pid */
 	char *prompt = ((char *) (malloc(sizeof(char)*50)));//4 bytes needed for pid int, 1 for null character in the end
 	int pid = getpid();
-	sprintf(prompt, "dsh(PID = %d)$ ", pid);
+	sprintf(prompt, "\ndsh(PID = %d)$ ", pid);
 	return prompt;
 }
 
@@ -368,6 +377,7 @@ int main()
 				if(job_is_stopped(cur_job)){
 					if(job_is_completed(cur_job)){
 						temp_job = cur_job->next;
+						fprintf(stdout, "Job %ld(completed): %s\n", (long)cur_job->pgid, cur_job->commandinfo);
 						delete_job(cur_job, j);
 						cur_job = temp_job;
 					}

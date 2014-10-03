@@ -1,3 +1,11 @@
-23598(Launched): cat a
-cat: a: No such file or directory
-23598(Completed): cat a
+26459(Launched): ls
+26460(Launched): ls | wc
+26459(Completed): ls
+26460(Completed): ls | wc
+26462(Launched): cat < Makefile | wc > output 
+26462(Completed): cat < Makefile | wc > output 
+26464(Launched): cat Makefile | wc | ls
+26467(Launched): cat < Makefile | wc | ls > output
+26470(Launched): cat Makefile | wc < Makefile | ls > output
+26473(Launched): cat < Makefile | wc < Makefile | ls > output
+26476(Launched): ls | sort | wc
