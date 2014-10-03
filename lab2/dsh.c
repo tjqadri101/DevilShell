@@ -70,7 +70,10 @@ void spawn_job(job_t *j, bool fg)
 
 	  /* YOUR CODE HERE? */
 	  /* Builtin commands are already taken care earlier */
-	  pipe(fpp);
+	  if(pipe(fpp) < 0){
+		perror("pipe");
+            	exit(EXIT_FAILURE);
+	  }
 	  switch (pid = fork()) {
 
           case -1: /* fork failure */
@@ -135,7 +138,10 @@ void spawn_job(job_t *j, bool fg)
             break;    /* NOT REACHED */
 
           default: /* parent */
-			pipe(bpp);
+			if(pipe(bpp) < 0){
+				perror("pipe");
+            			exit(EXIT_FAILURE);
+			}
 			
 			bpp[0] = fpp[0];
 			//close(bpp[0]);
