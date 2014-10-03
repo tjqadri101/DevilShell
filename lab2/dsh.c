@@ -56,12 +56,17 @@ void spawn_job(job_t *j, bool fg)
 
 	pid_t pid;
 	process_t *p;
-
+	
+	int ppos = 0;
+	int fpp[2];
+	int bpp[2];
+	
+	
 	for(p = j->first_process; p; p = p->next) {
 
 	  /* YOUR CODE HERE? */
 	  /* Builtin commands are already taken care earlier */
-	  
+	  pipe(fpp);
 	  switch (pid = fork()) {
 
           case -1: /* fork failure */
@@ -76,6 +81,7 @@ void spawn_job(job_t *j, bool fg)
 	    /* YOUR CODE HERE?  Child-side code for new process. */
 
 		//Negatu's code
+		
 		if(p->ofile != NULL){
 		 close(STDOUT_FILENO);
 		 open(p->ofile, O_CREAT|O_WRONLY, S_IRWXU);
@@ -84,20 +90,52 @@ void spawn_job(job_t *j, bool fg)
 		 close(STDIN_FILENO);
 		 open(p->ifile, O_RDONLY, S_IRWXU);
 		}
-		if(p->next != NULL){
-		 process_t *p2;//next process in pipeline
-		 p2 = p->next;
-		 
-		}
+		
 
+		if(p->next != NULL){
+		 //printf("\n -ch sender %d %s \n",ppos,p->argv[0]);
+		 close(STDOUT_FILENO);
+		 dup2(fpp[1],STDOUT_FILENO);
+		 close(fpp[0]);
+		 //close(fpp[1]);
+		 //perror("\n --------- ");
+		
+		 }
+		 
+		 if (ppos!=0){
+		  //printf("\n -ch getter %d %s \n",ppos,p->argv[0]);
+			close(STDIN_FILENO);
+			dup2(bpp[0],STDIN_FILENO);
+			close(bpp[1]);
+			//close(bpp[0]);
+			// perror("\n --------- ");
+			//close(bpp[1]);
+			 //perror("\n --------- ");
+		}
+		
+
+		printf("");
 		execvp(p->argv[0],p->argv);
 		//Negatu's code ends here
 
             perror("New child should have done an exec");
-            exit(EXIT_FAILURE);  /* NOT REACHED */
+            exit(EXIT_FAILURE);  /* NOT REACHED  */
             break;    /* NOT REACHED */
 
           default: /* parent */
+		
+		pipe(bpp);
+		
+		bpp[0] = fpp[0];
+		//close(bpp[0]);
+		close(bpp[1]);
+		//close(fpp[0]);
+		close(fpp[1]);
+		
+		ppos++;
+		//printf("\n sender %d %s \n",ppos,p->argv[0]);
+		
+
             /* establish child process group */
             p->pid = pid;
             set_child_pgid(j, p);
@@ -319,8 +357,10 @@ int main()
 		while(cur_job != NULL) {
 		//As per instructions, if a job contains a builtin command then it is the only command in the job
 			if(!builtin_cmd(cur_job, cur_job->first_process->argc, cur_job->first_process->argv)){
+				
 				if (cur_job->bg){
 					spawn_job(cur_job,false);
+					
 				}
 				else{
 					spawn_job(cur_job,true);
