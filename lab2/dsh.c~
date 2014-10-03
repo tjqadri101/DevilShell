@@ -171,19 +171,25 @@ job_t* find_job_in_list(pid_t pgid, job_t *first_job){
 		cur_job = cur_job->next;
 	}
 	//job not found in list
-	printf("Job with group id = %d was not found.\n", pgid);
+	
 	return NULL;
 
 }
 /*Wakes up a blocked job, updates the status of the blocked processes to false, then updates a process's overall status flags after a process has completed*/
 void wake_update_job(job_t *j){
 	process_t *p;
+	if((j == NULL) || (j->pgid <=0)){
+		printf("Job with group id = %d was not found.\n", j->pgid);
+		return;
+	}
 	continue_job(j);
+	seize_tty(j->pgid);// assign the terminal
 	printf("Resuming job with group id = %d\n",j->pgid);
 	//update stopped field of the processes
 	for(p = j->first_process; p; p = p->next){
 		p->stopped = false;
 	}
+	 
 	//for each process of the job, see the status at the end of process (completed, stopped, interrupted) and set the flags in the process_t sturct appropriately*/
 	set_job_status(j);
 	if(job_is_stopped(j)){
@@ -192,6 +198,7 @@ void wake_update_job(job_t *j){
 		}
 		//else if job suspended again, leave in active_list
 	}
+	seize_tty(getpid());//let tty sieze control back
 }
 /*Talal's code ends*/
 
@@ -226,12 +233,15 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
             /* Your code here */
         }
         else if (!strcmp("fg", argv[0])) {
+	    job_t *j = NULL;
             if(argv[1]){//the pgid was given as an argument
 		int pgid = (int) (strtol(argv[1], NULL, 0));
-		wake_update_job(pgid, active_list));
+		if((j = find_job_in_list(pgid, active_list)));
+			wake_update_job(j);
 	    }
 	    else{//No pgid was given as an argument
-		wake_update_job(find_last_job(active_list));
+		if((j = find_last_job(active_list)))
+			wake_update_job(j);
 	    }
 	    return true;
         }
