@@ -1,11 +1,11 @@
-26459(Launched): ls
-26460(Launched): ls | wc
-26459(Completed): ls
-26460(Completed): ls | wc
-26462(Launched): cat < Makefile | wc > output 
-26462(Completed): cat < Makefile | wc > output 
-26464(Launched): cat Makefile | wc | ls
-26467(Launched): cat < Makefile | wc | ls > output
-26470(Launched): cat Makefile | wc < Makefile | ls > output
-26473(Launched): cat < Makefile | wc < Makefile | ls > output
-26476(Launched): ls | sort | wc
+21397(Launched): ls
+21398(Launched): ls | wc
+21397(Completed): ls
+21398(Completed): ls | wc
+21400(Launched): cat < Makefile | wc > output 
+21400(Completed): cat < Makefile | wc > output 
+21402(Launched): cat Makefile | wc | ls
+21405(Launched): cat < Makefile | wc | ls > output
+21408(Launched): cat Makefile | wc < Makefile | ls > output
+21411(Launched): cat < Makefile | wc < Makefile | ls > output
+21414(Launched): ls | sort | wc

@@ -1,10 +1,13 @@
+/*Modified by Talal Javed Qadri and Negatu Asmamaw*/
+
 #include "dsh.h"
 
 void seize_tty(pid_t callingprocess_pgid); /* Grab control of the terminal for the calling process pgid.  */
 void continue_job(job_t *j); /* resume a stopped job */
 void spawn_job(job_t *j, bool fg); /* spawn a new job */
 void set_job_status(job_t *j);/*set process status for a spawned job*/
-
+void Close(int fd);/*calls the close system call with error checking*/
+void Dup2(int oldfd, int newfd);/*Call the dup2 system call with error checking*/
 job_t *active_list = NULL; //active list of jobs
 
 
@@ -84,20 +87,26 @@ void spawn_job(job_t *j, bool fg)
 		//Negatu's code
 		
 		if(p->ofile != NULL){
-		 close(STDOUT_FILENO);
-		 open(p->ofile, O_CREAT|O_WRONLY, S_IRWXU);
+		 Close(STDOUT_FILENO);
+		 if(open(p->ofile, O_CREAT|O_WRONLY, S_IRWXU) < 0){
+			 perror("open");
+           		 exit(EXIT_FAILURE);
+		}
+;
 		}
 		if(p->ifile != NULL){
-		 close(STDIN_FILENO);
-		 open(p->ifile, O_RDONLY, S_IRWXU);
+		 Close(STDIN_FILENO);
+		 if(open(p->ifile, O_RDONLY, S_IRWXU) < 0){
+			perror("open");
+           		exit(EXIT_FAILURE);
 		}
 		
 
 		if(p->next != NULL){
 		 //printf("\n -ch sender %d %s \n",ppos,p->argv[0]);
-		 close(STDOUT_FILENO);
-		 dup2(fpp[1],STDOUT_FILENO);
-		 close(fpp[0]);
+		 Close(STDOUT_FILENO);
+		 Dup2(fpp[1],STDOUT_FILENO);
+		 Close(fpp[0]);
 		 //close(fpp[1]);
 		 //perror("\n --------- ");
 		
@@ -105,9 +114,9 @@ void spawn_job(job_t *j, bool fg)
 		 
 		 if (ppos!=0){
 		  //printf("\n -ch getter %d %s \n",ppos,p->argv[0]);
-			close(STDIN_FILENO);
-			dup2(bpp[0],STDIN_FILENO);
-			close(bpp[1]);
+			Close(STDIN_FILENO);
+			Dup2(bpp[0],STDIN_FILENO);
+			Close(bpp[1]);
 			//close(bpp[0]);
 			// perror("\n --------- ");
 			//close(bpp[1]);
@@ -128,9 +137,9 @@ void spawn_job(job_t *j, bool fg)
 		
 		bpp[0] = fpp[0];
 		//close(bpp[0]);
-		close(bpp[1]);
+		Close(bpp[1]);
 		//close(fpp[0]);
-		close(fpp[1]);
+		Close(fpp[1]);
 		
 		ppos++;
 		//printf("\n sender %d %s \n",ppos,p->argv[0]);
@@ -138,7 +147,7 @@ void spawn_job(job_t *j, bool fg)
 
             /* establish child process group */
             p->pid = pid;
-	    if(j->pgid < 0)
+	    if(j->pgid < 0 && fg)
 	    		launchCheck = true;
             set_child_pgid(j, p);
 	    if(launchCheck){
@@ -146,7 +155,7 @@ void spawn_job(job_t *j, bool fg)
 			launchCheck = false;
 	    }
             /* Parent-side code for new process.  */
-	    //Talal's code
+	    //Talal's code block starts here*/
 	    if (waitpid(pid, &p->status, WNOHANG|WUNTRACED) < 0){//waitpid here returns immediately, with a return value of 0,...
 							      //if none of the children in the wait set has stopped or terminated, or with a...
 								//return value equal to the PID of one of the stopped or terminated children.
@@ -156,6 +165,7 @@ void spawn_job(job_t *j, bool fg)
           }
 	}
 	/* Parent-side code for new job.*/
+	
 	//By this point, all child processes have been created
 	//We know a job is completed only when all the processes have exited
 	//However,we want the processes to run concurrently si waitpid in the for loop above is non-blocking
@@ -164,6 +174,23 @@ void spawn_job(job_t *j, bool fg)
 	seize_tty(getpid()); // assign the terminal back to dsh
 	
 }
+
+//calls the close system call with error checking
+void Close(int fd){
+	if(close(fd) < 0){
+		perror("close");
+            	exit(EXIT_FAILURE);
+	}
+}
+
+/*Call the dup2 system call with error checking*/
+void Dup2(int oldfd, int newfd){
+	if(dup2(oldfd, newfd) < 0){
+		perror("dup2");
+            	exit(EXIT_FAILURE);
+	}
+}
+
 //Sets the status int of a process_t, as well as the completed and stopped bools
 //Method ensures that these values are updated after a process has completed
 void set_job_status(job_t *j){
@@ -386,8 +413,6 @@ int main()
 						cur_job = cur_job->next;
 						append_to_joblist(temp_job, active_list);
 					}
-
-
 				}
 				
 			}
@@ -399,8 +424,6 @@ int main()
 		}
 		
 		/* Block ends here*/
-
-
 
     }
 }
