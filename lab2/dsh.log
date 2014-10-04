@@ -1,11 +1,5 @@
-21397(Launched): ls
-21398(Launched): ls | wc
-21397(Completed): ls
-21398(Completed): ls | wc
-21400(Launched): cat < Makefile | wc > output 
-21400(Completed): cat < Makefile | wc > output 
-21402(Launched): cat Makefile | wc | ls
-21405(Launched): cat < Makefile | wc | ls > output
-21408(Launched): cat Makefile | wc < Makefile | ls > output
-21411(Launched): cat < Makefile | wc < Makefile | ls > output
-21414(Launched): ls | sort | wc
+6264(Launched): gedit
+6264: Terminated by signal 2.
+6302(Launched): gedit 
+6544(Launched): ls | gedit
+6569(Launched): gedit

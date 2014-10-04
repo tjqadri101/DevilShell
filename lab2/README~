@@ -10,17 +10,15 @@
 	Please follow the format or our scripts will break. 
 */
 
-	Name1: 
-	NetId1: 
-	Time spent: 10 hours
+	Name1: Negatu Asmamaw
+	NetId1: nna4@duke.edu
+	Time spent: 20 hours
 
-	Name2: 
-	NetId2:
-	Time spent: 10 hours
+	Name2: Talal Javad Qadri
+	NetId2: tq4t
+	Time spent: 20 hours
 
-	Name3: 
-	NetId3:
-	Time spent: 10 hours
+
 
 /******************
  * Files to submit
@@ -49,19 +47,35 @@
  * details to maximize your partial credit.  
  * */
 
+We implemented everything including the background extra credit component.
+
+(1)Multiple Pipelines
+For multiple pipelines, we created a potential pipe for each process first. 
+Then we check if that process is in a pipeline sequence i.e if it need to read from or right to a pipeline. 
+For the case that it needs to write, we write to the pipe and we made the parent hold the value of the read end of this pipe so that the next process in the pipeline can read from it. 
+And thus, process that need to read from a pipeline recieve a pipeline from the parent to read from. 
+
+(2)Job control 
+We maintain a list of background and suspended jobs. ctrl-z suspends the current foreground job. We always use the waitpid function with WNOHANG and WUNTRACED. This allows us to potentially launch all processes in a job to run concurrently while we are in our forking loop. After forking for a job is done, the spawn_job() method calls the set_job_status() method. For foreground jobs, the set_job_status method waits for a process to complete (normally or abnormally) or stop and then sets the completed or stopped flags appropriately. Hence, foreground jobs are fully completed before control returns to the prompt in the main loop. For background jobs, instead of waiting for the job processes to complete, we just check their status at the time of check. Hence, the main method is not stalled by waiting for a background job to complete. ctrl-z for the current foreground job suspends the job. The WIFSTOPPED macro is used to check whether the job has been stopped. A stopped job (as well as a background job) is then added to the active list of jobs. The 'fg' built-in command uses the provided pgid argument to look for a job in the active list. If a job is found, then that job (suspended or background) is moved to the foreground. The movement to foreground happens via the fg_wake_update_job() method which calls the set_job_status() internally. The 'bg' built in command uses the provided pgid argument to look for a suspended job in the active list and resume it in the background. Both fg and bg only print a statement if no argument is given. The statement basically tells the users to use an argument with these commands. After foreground jobs complete, a statement is printed signalling their completeion and control is returned to the prompt. For background jobs, the jobs built in command needs to be called to see if they are complete. Jobs notifies the completion of a background job only once. All the data structures associated with a job are freed once that job has been completed. For background jobs, the freeing after completion is delayed until the user is notified of the completion once by the 'jobs' built in command. The dsh-example allowed background jobs like ls write to the terminal but not read from the terminal. Our shell does the same thing.
+
+(4)Built in commands
+The fg, bg, and jobs built in command are already discussed above. For cd, the chdir syscall is used. We use perror to do error handling for all of our syscalls in the code. Finally, the exit syscall is used to implement the quit built in command.
+
+(5)Input Output redirection
+For the input output redirection, most of the job is done for us by the parser. 
+The parser renders a process_t object that contains the input and output files that are associated with the process. 
+If those files do exist, we just make our stdin and stdout read and write to them. 
+
 /************************
  * Feedback on the lab
  ************************/
+This was a great lab experience. It allowed us to see how an operating systems syscalls can be used to offer lockboxing and sanboxing.
+We believe the emphasis on implemetation of design to handle porcesses was very useful in understanding how concurrency works at a lower level. Overall, we think
+this lab was a good learning experience. 
 
-/*
- * Any comments/questions/suggestions/experiences that you would help us to
- * improve the lab.
- * */
 
 /************************
  * References
  ************************/
-
-/*
- * List of collaborators involved including any online references/citations.
- * */
+We mainly refered to the recommended texts (OSTEP and CS-APP). In addition, we disscussed main concepts with TAs and students. 
+We also used many web sources and the unix manuals to learn about different system calls and their functionalities. 

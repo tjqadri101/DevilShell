@@ -8,6 +8,15 @@ void spawn_job(job_t *j, bool fg); /* spawn a new job */
 void set_job_status(job_t *j);/*set process status for a spawned job*/
 void Close(int fd);/*calls the close system call with error checking*/
 void Dup2(int oldfd, int newfd);/*Call the dup2 system call with error checking*/
+void remove_completed_jobin_activelist();//Removes the completed jobs from the active list
+void free_jb(job_t *j); /* free_job iterates and invokes free on all its members */
+void fg_wake_update_job(job_t *j);/*Wakes up a blocked job, updates the status of the blocked processes to false, then updates a process's overall status flags after a process has completed*/
+					/*If the job was background job then runs it in fg*/
+void bg_wake_update_job(job_t *j);/*Wakes up a blocked job and runs it in background, updates the status of the blocked processes to false, 
+					then updates a process's overall status flags by polling for the current status*/
+					/*If the job was background job then runs it in fg*/
+
+
 job_t *active_list = NULL; //active list of jobs
 
 
@@ -155,7 +164,7 @@ void spawn_job(job_t *j, bool fg)
 
 			/* establish child process group */
 			p->pid = pid;
-			if(j->pgid < 0 && fg)
+			if(j->pgid < 0)
 					launchCheck = true;
 			set_child_pgid(j, p);
 			if(launchCheck){
@@ -205,8 +214,13 @@ void set_job_status(job_t *j){
 	process_t *p;
 	pid_t pid;
 	for(p = j->first_process; p; p = p->next){
-		
-		while((pid = waitpid(p->pid, &p->status, WNOHANG|WUNTRACED)) == 0); //waitpid returns 0 here if child has not terminated; otherwise returns child pid or negative number on error
+		if(!j->bg){
+			while((pid = waitpid(p->pid, &p->status, WNOHANG|WUNTRACED)) == 0); //waitpid returns 0 here if child has not terminated;
+											    //otherwise returns child pid or negative number on error
+		}
+		else{//job was background so don't wait for all processes to complete, job will continue to run in background and status will be polled when jobs command is launched
+			pid = waitpid(p->pid, &p->status, WNOHANG|WUNTRACED);
+		}	
 			//p has exited by now, either normally or abnormally		
 			if(pid < 0){
 				perror("Process exited abnormally");
@@ -216,6 +230,7 @@ void set_job_status(job_t *j){
 				if (WIFEXITED(p->status)){
 					//printf("Process %d of job %ld terminated normally with exit status=%d\n",p->pid, (long)j->pgid, WEXITSTATUS(p->status));
 					p->completed = true;
+					p->stopped = false;
 				}
 				else if (WIFSTOPPED(p->status)){
 					//printf("Process %d of job %ld stopped by signal number=%d\n",p->pid, (long)j->pgid, WSTOPSIG(p->status));
@@ -255,29 +270,102 @@ job_t* find_job_in_list(pid_t pgid, job_t *first_job){
 
 }
 /*Wakes up a blocked job, updates the status of the blocked processes to false, then updates a process's overall status flags after a process has completed*/
-void wake_update_job(job_t *j){
+/*If the job was background job then runs it in fg*/
+void fg_wake_update_job(job_t *j){
 	process_t *p;
 	if((j == NULL) || (j->pgid <=0)){
-		printf("No such suspended job was found.\n");
+		printf("No such job was found.\n");
 		return;
 	}
-	continue_job(j);
-	seize_tty(j->pgid);// assign the terminal
-	printf("Resuming job with group id = %d\n",j->pgid);
-	//update stopped field of the processes
-	for(p = j->first_process; p; p = p->next){
-		p->stopped = false;
-	}
-	 
-	//for each process of the job, see the status at the end of process (completed, stopped, interrupted) and set the flags in the process_t sturct appropriately*/
-	set_job_status(j);
-	if(job_is_stopped(j)){
-		if(job_is_completed(j)){
-			delete_job(j, active_list); //remove from active list
+	if(!job_is_completed(j)){
+		
+		continue_job(j);
+		seize_tty(j->pgid);
+		if(!j->bg)
+			printf("Resuming job with group id = %d\n",j->pgid);
+		else{
+			j->bg = false;
+			printf("Moving job with group id = %d from background to foreground.\n",j->pgid);
 		}
-		//else if job suspended again, leave in active_list
+		//update stopped field of the processes
+		for(p = j->first_process; p; p = p->next){
+			p->stopped = false;
+		}
+		 
+		//for each process of the job, see the status at the end of process (completed, stopped, interrupted) and set the flags in the process_t sturct appropriately*/
+		set_job_status(j);
+		if(job_is_stopped(j)){
+			if(job_is_completed(j)){
+				fprintf(stdout, "Job %ld(completed): %s\n", (long)j->pgid, j->commandinfo);
+				delete_job(j, active_list); //remove from active list
+			}
+			//else if job suspended again, leave in active_list
+		}
+	}
+	else{//bg job that is asked to be moved to foreground was already completed
+		fprintf(stdout, "Job %ld was already completed in background. Use jobs command for details.\n", (long)j->pgid);
 	}
 	seize_tty(getpid());//let tty sieze control back
+}
+
+/*Wakes up a blocked job and runs it in background, updates the status of the blocked processes to false, then updates a process's overall status flags by polling for the current status*/
+/*If the job was background job then runs it in fg*/
+void bg_wake_update_job(job_t *j){
+	process_t *p;
+	if((j == NULL) || (j->pgid <=0)){
+		printf("No such job was found.\n");
+		return;
+	}
+	j->bg = true;
+	
+	if(!job_is_completed(j)){
+		continue_job(j);
+		//update stopped field of the processes
+		for(p = j->first_process; p; p = p->next){
+				p->stopped = false;
+				p->status = -1; //reinitialize status to -1
+		}
+		//for each process of the job, poll the status and set the flags in the process_t sturct appropriately*/
+		//set_job_status(j);
+	}
+	else{
+		fprintf(stdout, "Job %ld was already completed.\n", (long)j->pgid);
+	}
+}
+
+/* free_job iterates and invokes free on all its members */
+void free_jb(job_t *j) 
+{
+	if(!j)
+		return;
+	free(j->commandinfo);
+	process_t *p;
+	for(p = j->first_process; p; p = p->next) {
+		int i;
+		for(i = 0; i < p->argc; i++)
+			free(p->argv[i]);
+		free(p->argv);
+        	free(p->ifile);
+        	free(p->ofile);
+	}
+	free(j);
+}
+
+//Removes the completed jobs from the active list
+void remove_completed_jobin_activelist(){
+	job_t * cur = active_list;
+	job_t* temp;
+	while(cur->next!= NULL){
+		if(job_is_completed(cur->next)) {
+			temp = cur->next->next;
+			free_jb(cur->next);
+			cur->next = temp;
+		}
+		else{
+			cur = cur->next;
+		}
+	}
+
 }
 /*Talal's code ends*/
 
@@ -300,8 +388,17 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
             // Only prints out the suspended jobs that have not yet completed 
 	    //The user is notified of completed jobs when the prompt appears again...
             //which means that the job has completed and the shell is running in the foreground again
-	    if(active_list->next)	    
+	    job_t *cur;
+	    if(active_list->next){
+		cur = active_list->next;
+		while(cur != NULL){
+			if(cur->bg)//poll job status
+				set_job_status(cur);	
+			cur = cur->next;
+		}	    
 		print_job(active_list->next);
+		remove_completed_jobin_activelist();
+	    }
 	    else
 		printf("There are currently no active jobs.\n");
             return true;
@@ -312,18 +409,26 @@ bool builtin_cmd(job_t *last_job, int argc, char **argv)
 		return true;
         }
         else if (!strcmp("bg", argv[0])) {
-            /* Your code here */
+            job_t *j = NULL;
+            if(argv[1]){//the pgid was given as an argument
+		int pgid = (int) (strtol(argv[1], NULL, 0));
+		if((j = find_job_in_list(pgid, active_list)));
+			bg_wake_update_job(j);
+	    }
+	    else{// No pgid was given as an argument so do nothing
+	    	printf("Please give a pgid argument to bg\n");
+	    }
+	    return true;
         }
         else if (!strcmp("fg", argv[0])) {
 	    job_t *j = NULL;
             if(argv[1]){//the pgid was given as an argument
 		int pgid = (int) (strtol(argv[1], NULL, 0));
 		if((j = find_job_in_list(pgid, active_list)));
-			wake_update_job(j);
+			fg_wake_update_job(j);
 	    }
-	    else{//No pgid was given as an argument
-		if((j = find_last_job(active_list)))
-			wake_update_job(j);
+	    else{// No pgid was given as an argument so do nothing
+	    	printf("Please give a pgid argument to fg\n");
 	    }
 	    return true;
         }
@@ -405,25 +510,28 @@ int main()
 				
 				if (cur_job->bg){
 					spawn_job(cur_job,false);
+					temp_job = cur_job;
+					cur_job = cur_job->next;
+					append_to_joblist(temp_job, active_list);
 					
 				}
 				else{
 					spawn_job(cur_job,true);
-				}
-				if(job_is_stopped(cur_job)){
-					if(job_is_completed(cur_job)){
-						temp_job = cur_job->next;
-						fprintf(stdout, "Job %ld(completed): %s\n", (long)cur_job->pgid, cur_job->commandinfo);
-						delete_job(cur_job, j);
-						cur_job = temp_job;
-					}
-					else{//job was stopped so add to active list
-						temp_job = cur_job;
-						cur_job = cur_job->next;
-						append_to_joblist(temp_job, active_list);
-					}
-				}
 				
+					if(job_is_stopped(cur_job)){
+						if(job_is_completed(cur_job)){
+							temp_job = cur_job->next;
+							fprintf(stdout, "Job %ld(completed): %s\n", (long)cur_job->pgid, cur_job->commandinfo);
+							delete_job(cur_job, j);
+							cur_job = temp_job;
+						}
+						else{//job was stopped so add to active list
+							temp_job = cur_job;
+							cur_job = cur_job->next;
+							append_to_joblist(temp_job, active_list);
+						}
+					}
+				}
 			}
 			else{//command was a built in command
 				cur_job = cur_job->next;
